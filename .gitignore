@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Windows / macOS
+.DS_Store
+Thumbs.db
+
+# GDELT raw downloads
+data/raw/
+*.CSV.zip
+*.csv.zip
+
+# Local SQLite database
+data/security_monitor.db
+data/*.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+# Local AI cache / generated outputs
+data/ai/
