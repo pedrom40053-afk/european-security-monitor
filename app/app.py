@@ -133,6 +133,49 @@ def contains_pipe_value(value, target):
     return target in values
 
 
+def prepare_dashboard_data(df):
+
+    prepared = df.copy()
+
+    # GDELT SQLDATE is the date attributed to the extracted
+    # event and can occasionally refer to historical/background
+    # context. Keep it for transparency, but do not use it as the
+    # monitoring-period filter.
+    prepared["event_date"] = pd.to_datetime(
+        prepared["event_date"],
+        errors="coerce"
+    )
+
+    # The batch identifier starts with YYYYMMDDHHMMSS. Its first
+    # eight digits are therefore a reliable "observed by monitor"
+    # date for this pipeline.
+    if "gdelt_batch" in prepared.columns:
+
+        batch_date_text = (
+            prepared["gdelt_batch"]
+            .astype("string")
+            .str.extract(
+                r"(\d{8})",
+                expand=False
+            )
+        )
+
+        prepared["observed_date"] = pd.to_datetime(
+            batch_date_text,
+            format="%Y%m%d",
+            errors="coerce"
+        )
+
+    else:
+
+        # Compatibility fallback for an older database schema.
+        prepared["observed_date"] = prepared[
+            "event_date"
+        ]
+
+    return prepared
+
+
 def apply_filters(
     df,
     date_range,
@@ -156,8 +199,7 @@ def apply_filters(
             date_range[0]
         )
 
-        # Exclusive upper limit makes this robust
-        # even if event_date later contains times.
+        # Exclusive upper limit keeps the full selected end date.
         end_date = (
             pd.Timestamp(date_range[1])
             + pd.Timedelta(days=1)
@@ -165,12 +207,12 @@ def apply_filters(
 
         filtered_df = filtered_df[
             (
-                filtered_df["event_date"]
+                filtered_df["observed_date"]
                 >= start_date
             )
             &
             (
-                filtered_df["event_date"]
+                filtered_df["observed_date"]
                 < end_date
             )
         ]
@@ -256,9 +298,8 @@ if df_initial.empty:
     st.stop()
 
 
-df_initial["event_date"] = pd.to_datetime(
-    df_initial["event_date"],
-    errors="coerce"
+df_initial = prepare_dashboard_data(
+    df_initial
 )
 
 
@@ -273,6 +314,12 @@ st.title(
 st.write(
     "Interactive monitoring of European security "
     "and geopolitical events using GDELT data."
+)
+
+st.caption(
+    "Dashboard date filters use the GDELT batch observation date. "
+    "GDELT event dates are retained as contextual metadata and may "
+    "occasionally refer to earlier events mentioned in reporting."
 )
 
 
@@ -290,7 +337,7 @@ st.sidebar.header(
 # --------------------------------------------------
 
 valid_dates = (
-    df_initial["event_date"]
+    df_initial["observed_date"]
     .dropna()
 )
 
@@ -307,13 +354,17 @@ max_date = (
 )
 
 date_range = st.sidebar.date_input(
-    "Date range",
+    "Observation date range",
     value=(
         min_date,
         max_date
     ),
     min_value=min_date,
-    max_value=max_date
+    max_value=max_date,
+    help=(
+        "Based on the GDELT batch date when the monitor "
+        "observed the information, rather than GDELT SQLDATE."
+    )
 )
 
 
@@ -393,9 +444,8 @@ def live_dashboard(
 
     df = load_data()
 
-    df["event_date"] = pd.to_datetime(
-        df["event_date"],
-        errors="coerce"
+    df = prepare_dashboard_data(
+        df
     )
 
     latest_update = (
@@ -603,12 +653,17 @@ def live_dashboard(
             size="attention_score",
             hover_name="location",
             hover_data={
+                "article_title": True,
+                "primary_domain": True,
+                "event_status": True,
                 "actor1": True,
                 "actor2": True,
+                "observed_date": "|%Y-%m-%d",
                 "event_root_label": True,
-                "security_domains": True,
-                "attention_score": True,
+                "attention_score": ":.1f",
                 "attention_band": True,
+                "event_date": False,
+                "security_domains": False,
                 "latitude": False,
                 "longitude": False
             },
@@ -835,44 +890,64 @@ def live_dashboard(
                     else "Unknown location"
                 )
 
-                st.markdown(
-                    f"### {location}"
+                article_title = (
+                    row["article_title"]
+                    if pd.notna(
+                        row["article_title"]
+                    )
+                    and str(
+                        row["article_title"]
+                    ).strip()
+                    else location
                 )
 
-                event_label = (
-                    row[
-                        "event_root_label"
-                    ]
-                    if pd.notna(
-                        row[
-                            "event_root_label"
-                        ]
-                    )
-                    else "Unknown"
+                st.markdown(
+                    f"### {article_title}"
                 )
 
                 st.write(
-                    f"**Event:** "
-                    f"{event_label}"
+                    f"**Location:** "
+                    f"{location}"
                 )
 
-                domains_text = (
-                    row[
-                        "security_domains"
-                    ]
+                primary_domain = (
+                    row["primary_domain"]
                     if pd.notna(
-                        row[
-                            "security_domains"
-                        ]
+                        row["primary_domain"]
                     )
                     else "Unclassified"
                 )
 
                 st.write(
                     f"**Domain:** "
-                    f"{domains_text}"
+                    f"{primary_domain}"
                 )
 
+                event_status = (
+                    row["event_status"]
+                    if pd.notna(
+                        row["event_status"]
+                    )
+                    else "Unclear"
+                )
+
+                st.write(
+                    f"**AI status:** "
+                    f"{event_status}"
+                )
+
+                event_label = (
+                    row["event_root_label"]
+                    if pd.notna(
+                        row["event_root_label"]
+                    )
+                    else "Unknown"
+                )
+
+                st.write(
+                    f"**GDELT event:** "
+                    f"{event_label}"
+                )
 
                 actor1 = (
                     row["actor1"]
@@ -895,19 +970,35 @@ def live_dashboard(
                     f"{actor1} → {actor2}"
                 )
 
-
                 if pd.notna(
-                    row["event_date"]
+                    row["observed_date"]
                 ):
 
-                    event_date = (
-                        row["event_date"]
+                    observed_date = (
+                        row["observed_date"]
                         .date()
                     )
 
                     st.write(
-                        f"**Date:** "
-                        f"{event_date}"
+                        f"**Observed:** "
+                        f"{observed_date}"
+                    )
+
+                if (
+                    pd.notna(
+                        row["event_date"]
+                    )
+                    and pd.notna(
+                        row["observed_date"]
+                    )
+                    and row["event_date"].date()
+                    != row["observed_date"].date()
+                ):
+
+                    st.caption(
+                        "GDELT event date: "
+                        f"{row['event_date'].date()} "
+                        "(may reflect event/background context)"
                     )
 
 
