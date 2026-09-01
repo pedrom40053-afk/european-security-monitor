@@ -14,7 +14,9 @@ The project combines **GDELT Events + GKG**, geographic filtering, **local seman
 
 ![European Security Monitor map and filters](docs/dashboard_map.png)
 
-The dashboard provides an interactive view of security-relevant events, including geographic distribution, security domain, attention level, source information and event details.
+![European Security Monitor critical event feed](docs/dashboard_critical_events.png)
+
+The dashboard provides an interactive view of security-relevant events, including geographic distribution, security domain, attention level, source information and event details. The event feed highlights high-priority developments with their location, event type, security domain, actors, date, source link and Attention Score.
 
 ---
 
@@ -199,7 +201,8 @@ european-security-monitor/
 |
 |-- docs/
 |   |-- dashboard_overview.png
-|   `-- dashboard_map.png
+|   |-- dashboard_map.png
+|   `-- dashboard_critical_events.png
 |
 |-- notebooks/
 |   `-- 01_api_exploration.ipynb
