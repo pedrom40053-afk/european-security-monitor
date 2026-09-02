@@ -12,7 +12,51 @@ import streamlit as st
 
 st.set_page_config(
     page_title="European Security Monitor",
+    page_icon="🛡️",
     layout="wide"
+)
+
+# ==================================================
+# DASHBOARD STYLING
+# ==================================================
+
+st.markdown(
+    """
+    <style>
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e6eaf0;
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+        min-height: 118px;
+    }
+
+    div[data-testid="stMetric"] label {
+        font-weight: 600;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-weight: 700;
+    }
+
+    details[data-testid="stExpander"] {
+        border-radius: 12px;
+        border-color: #e6eaf0;
+    }
+
+    div.stButton > button,
+    div[data-testid="stLinkButton"] > a {
+        border-radius: 10px;
+    }
+
+    .block-container {
+        padding-top: 2.2rem;
+        padding-bottom: 2.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 
@@ -317,9 +361,8 @@ st.write(
 )
 
 st.caption(
-    "Dashboard date filters use the GDELT batch observation date. "
-    "GDELT event dates are retained as contextual metadata and may "
-    "occasionally refer to earlier events mentioned in reporting."
+    "Date filters reflect when developments were observed by the monitor. "
+    "GDELT event dates are retained as contextual information."
 )
 
 
@@ -484,7 +527,7 @@ def live_dashboard(
         )
 
         with st.expander(
-            "Latest update details"
+            "Latest batch summary"
         ):
 
             (
@@ -495,7 +538,7 @@ def live_dashboard(
             ) = st.columns(4)
 
             col_a.metric(
-                "Events Processed",
+                "📥 Events Processed",
                 int(
                     update[
                         "events_processed"
@@ -504,7 +547,7 @@ def live_dashboard(
             )
 
             col_b.metric(
-                "Geographic Events",
+                "🌍 Geographic Events",
                 int(
                     update[
                         "geographic_events"
@@ -513,7 +556,7 @@ def live_dashboard(
             )
 
             col_c.metric(
-                "Relevant Events",
+                "🎯 Relevant Events",
                 int(
                     update[
                         "security_relevant_events"
@@ -522,7 +565,7 @@ def live_dashboard(
             )
 
             col_d.metric(
-                "New Events Added",
+                "➕ New Events Added",
                 int(
                     update[
                         "new_events_added"
@@ -576,17 +619,17 @@ def live_dashboard(
 
 
     col1.metric(
-        "Security Events",
+        "🛡️ Security Events",
         total_events
     )
 
     col2.metric(
-        "Critical Events",
+        "🚨 Critical Events",
         critical_events
     )
 
     col3.metric(
-        "Avg Attention Score",
+        "📊 Avg Attention Score",
         (
             f"{average_attention:.1f}"
             if pd.notna(
@@ -597,7 +640,7 @@ def live_dashboard(
     )
 
     col4.metric(
-        "Countries Covered",
+        "🗺️ Countries Covered",
         countries_covered
     )
 
@@ -613,6 +656,202 @@ def live_dashboard(
         )
 
         return
+
+
+    # ==================================================
+    # DAILY PRIORITY BRIEF
+    # ==================================================
+
+    st.divider()
+
+    brief_title_col, brief_toggle_col = st.columns(
+        [4, 1]
+    )
+
+    with brief_title_col:
+
+        st.subheader(
+            "Daily Priority Brief"
+        )
+
+        st.caption(
+            "Highest-attention developments from the latest "
+            "observation date within the current filters."
+        )
+
+    with brief_toggle_col:
+
+        show_daily_brief = st.toggle(
+            "Show brief",
+            value=False
+        )
+
+    latest_observed_date = (
+        filtered_df["observed_date"]
+        .dropna()
+        .max()
+    )
+
+    if pd.notna(
+        latest_observed_date
+    ):
+
+        latest_day = (
+            latest_observed_date.date()
+        )
+
+        latest_day_events = (
+            filtered_df[
+                filtered_df[
+                    "observed_date"
+                ].dt.date
+                == latest_day
+            ]
+            .sort_values(
+                "attention_score",
+                ascending=False
+            )
+            .drop_duplicates(
+                subset="source_url"
+            )
+            .copy()
+        )
+
+        st.caption(
+            f"Latest observation date: {latest_day}  ·  "
+            f"{len(latest_day_events)} unique source articles"
+        )
+
+        if show_daily_brief:
+
+            top_daily = (
+                latest_day_events
+                .head(5)
+                .copy()
+            )
+
+            if top_daily.empty:
+
+                st.info(
+                    "No developments are available "
+                    "for the latest observation date."
+                )
+
+            else:
+
+                for rank, (_, row) in enumerate(
+                    top_daily.iterrows(),
+                    start=1
+                ):
+
+                    with st.container(
+                        border=True
+                    ):
+
+                        info_col, score_col = st.columns(
+                            [5, 1]
+                        )
+
+                        with info_col:
+
+                            title = (
+                                row["article_title"]
+                                if pd.notna(
+                                    row["article_title"]
+                                )
+                                and str(
+                                    row["article_title"]
+                                ).strip()
+                                else "Untitled development"
+                            )
+
+                            st.markdown(
+                                f"#### {rank}. {title}"
+                            )
+
+                            location = (
+                                row["location"]
+                                if pd.notna(
+                                    row["location"]
+                                )
+                                else "Unknown location"
+                            )
+
+                            domain = (
+                                row["primary_domain"]
+                                if pd.notna(
+                                    row["primary_domain"]
+                                )
+                                else "Unclassified"
+                            )
+
+                            status = (
+                                row["event_status"]
+                                if pd.notna(
+                                    row["event_status"]
+                                )
+                                else "Unclear"
+                            )
+
+                            st.write(
+                                f"**Location:** {location}"
+                            )
+
+                            st.write(
+                                f"**Domain:** {domain}"
+                            )
+
+                            st.write(
+                                f"**AI status:** {status}"
+                            )
+
+                        with score_col:
+
+                            score = row[
+                                "attention_score"
+                            ]
+
+                            st.metric(
+                                "🎯 Attention",
+                                (
+                                    f"{score:.1f}"
+                                    if pd.notna(score)
+                                    else "—"
+                                )
+                            )
+
+                            band = row[
+                                "attention_band"
+                            ]
+
+                            if pd.notna(
+                                band
+                            ):
+
+                                st.write(
+                                    f"**{band}**"
+                                )
+
+                        if (
+                            pd.notna(
+                                row["source_url"]
+                            )
+                            and str(
+                                row["source_url"]
+                            ).strip()
+                        ):
+
+                            st.link_button(
+                                "Open source article",
+                                row["source_url"]
+                            )
+
+    else:
+
+        st.info(
+            "No valid observation date is available "
+            "for the current selection."
+        )
 
 
     # ==================================================
@@ -845,7 +1084,12 @@ def live_dashboard(
     # ==================================================
 
     st.subheader(
-        "Highest Attention Developments"
+        "Highest Priority Developments"
+    )
+
+    st.caption(
+        "Highest Attention Score developments across "
+        "the current filtered period."
     )
 
     developments = (
